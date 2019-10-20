@@ -17,6 +17,8 @@ import os
 import time
 import re
 
+from pathlib import Path
+
 from release_bot.exceptions import ReleaseException, GitException
 from release_bot.utils import (
     insert_in_changelog,
@@ -328,17 +330,22 @@ class Github:
             mail = self.project.service.user.get_email()
         return name, mail
 
-    def get_file(self, name):
+    def get_file(self, name, always_fetch=False):
         """
         Fetches a specific file via Github API
-        @:param: str, name of the file
+        :param name: str, name of the file
+        :param always_fetch: bool, always fetch the file
         :return: file content or None in case of error
         """
-        self.logger.debug(f'Fetching {name}')
         try:
-            file = self.project.get_file_content(path=name)
+            if not always_fetch and Path(name).exists():
+                self.logger.debug(f'Reading local file content: {name}')
+                content = Path(name).read_text()
+            else:
+                self.logger.debug(f'Fetching {name}')
+                content = self.project.get_file_content(path=name)
         except FileNotFoundError:
             self.logger.error(f'Failed to fetch {name}')
             return None
 
-        return file
+        return content
