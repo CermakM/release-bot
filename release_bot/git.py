@@ -16,23 +16,53 @@
 """
 This module provides interface to git
 """
+import os
 import shutil
+
 from tempfile import TemporaryDirectory, mkdtemp
-from os import path
+
+from git import Repo, InvalidGitRepositoryError, NoSuchPathError
 
 from release_bot.utils import run_command, run_command_get_output
 from release_bot.exceptions import GitException
 
+# IF REPO_PATH is provided, check whether it is a valid directory 
+ENV_REPO_PATH = "REPO_PATH"
 
 class Git:
     """
     Interface to git
     """
     def __init__(self, url, conf):
-        self.repo_path = self.clone(url)
         self.credential_store = None
         self.conf = conf
         self.logger = conf.logger
+
+        # assume that we're in the target directory
+        repo_path = os.environ.get(ENV_REPO_PATH, os.getcwd())
+        try:
+            repo = Repo(repo_path)
+            self.logger.debug(f"Found local git repository: '{repo.working_dir}'")
+
+            # sanity check -- whether the origin matches the local remote
+            if repo.remote().exists() and any(
+                    f"{conf.repository_owner}/{conf.repository_name}" in remote
+                    for remote in repo.remotes.origin.urls
+            ):
+                self.repo_path = repo_path
+            else:
+                self.logger.debug(
+                    f"Directory '{repo_path}' does not have any matching remotes. "
+                    f"Cloning from {url} into a temporary directory."
+                )
+                self.repo_path = self.clone(url)
+
+        except (InvalidGitRepositoryError, NoSuchPathError):
+            self.logger.debug(
+                f"Directory {repo_path} is not valid git repository. "
+                f"Cloning from {url} into a temporary directory."
+            )
+            self.repo_path = self.clone(url)
 
     @staticmethod
     def clone(url):
@@ -133,16 +163,16 @@ class Git:
         if not self.credential_store:
             # TODO: do only a single tmpdir; merge this into tmpdir with git repo itself
             self.credential_store = TemporaryDirectory()
-            store_path = path.join(self.credential_store.name, 'credentials')
+            store_path = os.path.join(self.credential_store.name, 'credentials')
             # write down credentials
             with open(store_path, 'w+') as credentials:
                 credentials.write(
                     f'https://{self.conf.github_username}:{self.conf.github_token}@github.com/'
                     f'{self.conf.repository_owner}/{self.conf.repository_name}')
             # let git know
-            with open(path.join(self.repo_path, '.git/config'), 'a+') as config:
+            with open(os.path.join(self.repo_path, '.git/config'), 'a+') as config:
                 config.write(f'\n[credential]\n\thelper = store --file={store_path}\n')
-        return path.join(self.credential_store.name, 'credentials')
+        return os.path.join(self.credential_store.name, 'credentials')
 
     def checkout(self, target):
         """
