@@ -72,15 +72,15 @@ class ReleaseBot:
                          methods=['POST', ])
         app.run(host='0.0.0.0', port=8080)
 
-    def load_release_conf(self):
+    def load_release_conf(self, remote=False):
         """
         Updates new_release with latest release-conf.yaml from repository
         :return:
         """
         # load release configuration from release-conf.yaml in repository
-        conf = self.github.get_file("release-conf.yaml")
+        conf = self.github.get_file("release-conf.yaml", remote)
         release_conf = self.conf.load_release_conf(conf)
-        setup_cfg = self.github.get_file("setup.cfg")
+        setup_cfg = self.github.get_file("setup.cfg", remote)
         self.conf.set_pypi_project(release_conf, setup_cfg)
 
         self.new_release.update(
@@ -282,7 +282,8 @@ class ReleaseBot:
             while True:
                 self.git.pull()
                 try:
-                    self.load_release_conf()
+                    # we don't need to fetch, we're inside the repository already
+                    self.load_release_conf(remote=False)
                     if self.find_newest_release_pull_request():
                         self.make_new_github_release()
                         # Try to do PyPi release regardless whether we just did github release

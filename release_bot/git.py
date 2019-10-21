@@ -23,6 +23,8 @@ from tempfile import TemporaryDirectory, mkdtemp
 
 from git import Repo, InvalidGitRepositoryError, NoSuchPathError
 
+from ogr.utils import clone_repo_and_cd_inside
+
 from release_bot.utils import run_command, run_command_get_output
 from release_bot.exceptions import GitException
 
@@ -34,8 +36,8 @@ class Git:
     Interface to git
     """
     def __init__(self, url, conf):
-        self.credential_store = None
         self.conf = conf
+        self.credential_store = None
         self.logger = conf.logger
 
         # assume that we're in the target directory
@@ -64,17 +66,21 @@ class Git:
             )
             self.repo_path = self.clone(url)
 
-    @staticmethod
-    def clone(url):
+    def clone(self, url):
         """
         Clones repository from url to temporary directory
-        :param url:
+        and cds into the repository
+
+        :param url: URL of the repository to clone
         :return: TemporaryDirectory object
         """
         temp_directory = mkdtemp()
-        if not run_command(temp_directory, f'git clone {url} .',
-                           "Couldn't clone repository!", fail=True):
-            raise GitException(f"Can't clone repository {url}")
+        clone_repo_and_cd_inside(
+            self.conf.repository_name,
+            repo_ssh_url=url,
+            namespace=temp_directory
+        )
+
         return temp_directory
 
     def get_log_since_last_release(self, latest_version, gitchangelog):

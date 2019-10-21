@@ -16,7 +16,10 @@
 import os
 import warnings
 
+from pathlib import Path
+
 import pytest
+
 
 from release_bot.git import Git
 from release_bot.github import Github
@@ -70,7 +73,14 @@ class TestGithub:
 
     def test_get_file(self):
         """Tests fetching release-conf from Github"""
-        assert self.github.get_file("release-conf.yaml") == RELEASE_CONF
+        name = "release-conf.yaml"
+
+        # local check
+        expected_content = RELEASE_CONF if Path(name).exists() else None
+        assert self.github.get_file(name, remote=False) == expected_content
+
+        # remote check
+        assert self.github.get_file(name, remote=True) == RELEASE_CONF
 
     def test_latest_rls_not_existing(self):
         """Tests version number when there is no latest release"""
@@ -83,4 +93,3 @@ class TestGithub:
     def test_branch_exists_false(self):
         """Tests if branch doesn't exist"""
         assert not self.github.branch_exists('not-master')
-
